@@ -661,8 +661,9 @@ export const acceptTeamInvite = asyncHandler(async (req: Request, res: Response)
     
     console.log(`[acceptTeamInvite] Created sub-account ${subAccount._id} for ${teamMember.email}`);
   } else {
-    // Update existing sub-account to set mustSetPassword
+    // Update existing sub-account — team members never go through onboarding
     subAccount.mustSetPassword = true;
+    subAccount.onboardingStep = 'complete';
     await subAccount.save();
   }
 

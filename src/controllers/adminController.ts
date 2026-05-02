@@ -6,8 +6,12 @@ import { Company, PLAN_LIMITS } from '../models/Company';
 import { Job } from '../models/Job';
 import { Application } from '../models/Application';
 import { Favourite } from '../models/Favourite';
+import { TeamMember } from '../models/TeamMember';
+import { CompanyNotification } from '../models/CompanyNotification';
+import { Payment } from '../models/Payment';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { generateToken } from '../utils/jwt';
+import { generateVerificationToken } from '../utils/validators';
 import { ResendService } from '../services';
 
 const COOKIE_OPTS = {
@@ -49,29 +53,78 @@ export const getAdminMe = asyncHandler(async (req: Request, res: Response): Prom
   res.json({ success: true, data: admin });
 });
 
+export const updateAdminProfile = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { name, email } = req.body;
+  if (!name && !email) throw new AppError('Provide name or email to update', 400);
+
+  const admin = await Admin.findById(req.user!._id);
+  if (!admin) throw new AppError('Admin not found', 404);
+
+  if (email && email !== admin.email) {
+    const taken = await Admin.findOne({ email, _id: { $ne: admin._id } });
+    if (taken) throw new AppError('Email already in use', 409);
+    admin.email = email;
+  }
+  if (name) admin.name = name;
+
+  await admin.save();
+  res.json({ success: true, data: { _id: admin._id, name: admin.name, email: admin.email, role: admin.role } });
+});
+
+export const updateAdminPassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) throw new AppError('currentPassword and newPassword are required', 400);
+  if (newPassword.length < 8) throw new AppError('New password must be at least 8 characters', 400);
+
+  const admin = await Admin.findById(req.user!._id);
+  if (!admin) throw new AppError('Admin not found', 404);
+
+  const valid = await admin.comparePassword(currentPassword);
+  if (!valid) throw new AppError('Current password is incorrect', 401);
+
+  admin.password = newPassword;
+  await admin.save();
+  res.json({ success: true, message: 'Password updated' });
+});
+
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
 export const getOverviewStats = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  const [userCount, companyCount, jobCount, applicationCount, recentUsers, recentCompanies, recentJobs] =
-    await Promise.all([
-      User.countDocuments(),
-      Company.countDocuments(),
-      Job.countDocuments({ status: 'published' }),
-      Application.countDocuments(),
-      User.find().sort({ createdAt: -1 }).limit(8).select('firstname lastname email createdAt'),
-      Company.find().sort({ createdAt: -1 }).limit(8).select('companyName email verified createdAt'),
-      Job.find({ status: 'published' }).sort({ createdAt: -1 }).limit(8).select('title createdAt').populate('company', 'companyName'),
-    ]);
-
-  // Estimate revenue: count non-starter companies × approximate monthly price
-  const planRevenue = await Company.aggregate([
-    { $group: { _id: '$paymentPlan.planType', count: { $sum: 1 } } },
+  const [
+    userCount, suspendedUserCount,
+    companyCount, verifiedCompanyCount, suspendedCompanyCount,
+    publishedJobCount, totalJobCount,
+    applicationCount,
+    recentUsers, recentCompanies, recentJobs,
+    planRevenue,
+  ] = await Promise.all([
+    User.countDocuments(),
+    User.countDocuments({ suspended: true }),
+    Company.countDocuments(),
+    Company.countDocuments({ verified: true }),
+    Company.countDocuments({ suspended: true }),
+    Job.countDocuments({ status: 'published' }),
+    Job.countDocuments(),
+    Application.countDocuments(),
+    User.find().sort({ createdAt: -1 }).limit(8).select('firstname lastname email verified suspended createdAt'),
+    Company.find().sort({ createdAt: -1 }).limit(8).select('companyName email verified suspended paymentPlan createdAt'),
+    Job.find().sort({ createdAt: -1 }).limit(8).select('title status createdAt').populate('company', 'companyName'),
+    Company.aggregate([{ $group: { _id: '$paymentPlan.planType', count: { $sum: 1 } } }]),
   ]);
 
   res.json({
     success: true,
     data: {
-      counts: { users: userCount, companies: companyCount, jobs: jobCount, applications: applicationCount },
+      counts: {
+        users: userCount,
+        suspendedUsers: suspendedUserCount,
+        companies: companyCount,
+        verifiedCompanies: verifiedCompanyCount,
+        suspendedCompanies: suspendedCompanyCount,
+        publishedJobs: publishedJobCount,
+        totalJobs: totalJobCount,
+        applications: applicationCount,
+      },
       planRevenue,
       recentUsers,
       recentCompanies,
@@ -113,6 +166,24 @@ export const getUserDetail = asyncHandler(async (req: Request, res: Response): P
   ]);
 
   res.json({ success: true, data: { ...user.toObject(), applicationCount, favouriteCount } });
+});
+
+export const adminCreateUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { firstname, lastname, email, password } = req.body;
+  if (!firstname || !lastname || !email || !password) {
+    throw new AppError('firstname, lastname, email and password are required', 400);
+  }
+  const exists = await User.findOne({ email: email.toLowerCase() });
+  if (exists) throw new AppError('A user with this email already exists', 409);
+
+  const verificationToken = generateVerificationToken();
+  await User.create({ firstname, lastname, email, password, verificationToken });
+  await ResendService.sendVerificationEmail(email, verificationToken, 'user');
+
+  res.status(201).json({
+    success: true,
+    message: 'User created. A verification email has been sent to their inbox.',
+  });
 });
 
 export const suspendUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -167,9 +238,30 @@ export const getCompanyDetail = asyncHandler(async (req: Request, res: Response)
   const company = await Company.findById(req.params.id).select('-password -verificationToken -resetPasswordToken');
   if (!company) throw new AppError('Company not found', 404);
 
-  const jobs = await Job.find({ company: company._id }).select('title status views applicationCount createdAt').sort({ createdAt: -1 }).limit(20);
+  const [jobs, payments] = await Promise.all([
+    Job.find({ company: company._id }).select('title status location views applicationCount createdAt').sort({ createdAt: -1 }).limit(20),
+    Payment.find({ company: company._id }).sort({ createdAt: -1 }),
+  ]);
 
-  res.json({ success: true, data: { ...company.toObject(), jobs } });
+  res.json({ success: true, data: { ...company.toObject(), jobs, payments } });
+});
+
+export const adminCreateCompany = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { companyName, email, password } = req.body;
+  if (!companyName || !email || !password) {
+    throw new AppError('companyName, email and password are required', 400);
+  }
+  const exists = await Company.findOne({ email: email.toLowerCase() });
+  if (exists) throw new AppError('A company with this email already exists', 409);
+
+  const verificationToken = generateVerificationToken();
+  await Company.create({ companyName, email, password, verificationToken, onboardingStep: 'profile' });
+  await ResendService.sendVerificationEmail(email, verificationToken, 'company');
+
+  res.status(201).json({
+    success: true,
+    message: 'Company created. A verification email has been sent to their inbox.',
+  });
 });
 
 export const verifyCompany = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -203,7 +295,11 @@ export const deleteCompany = asyncHandler(async (req: Request, res: Response): P
 
   await Promise.all([
     Application.deleteMany({ job: { $in: jobIds } }),
+    Favourite.deleteMany({ job: { $in: jobIds } }),
     Job.deleteMany({ company: company._id }),
+    TeamMember.deleteMany({ company: company._id }),
+    CompanyNotification.deleteMany({ company: company._id }),
+    Payment.deleteMany({ company: company._id }),
     Company.deleteOne({ _id: company._id }),
   ]);
 
@@ -228,6 +324,12 @@ export const listAllJobs = asyncHandler(async (req: Request, res: Response): Pro
   ]);
 
   res.json({ success: true, data: { jobs, total, page: pageNum, totalPages: Math.ceil(total / limitNum) } });
+});
+
+export const getJobDetail = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const job = await Job.findById(req.params.id).populate('company', 'companyName logo email');
+  if (!job) throw new AppError('Job not found', 404);
+  res.json({ success: true, data: job });
 });
 
 export const forceCloseJob = asyncHandler(async (req: Request, res: Response): Promise<void> => {
