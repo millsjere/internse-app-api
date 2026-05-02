@@ -619,6 +619,7 @@ export const acceptTeamInvite = asyncHandler(async (req: Request, res: Response)
       email: subAccount.email,
       type: 'company',
       mustSetPassword: true,
+      teamRole: teamMember.role,
     });
     const expiry = getTokenExpiry(jwtToken);
     res.json({
@@ -633,6 +634,7 @@ export const acceptTeamInvite = asyncHandler(async (req: Request, res: Response)
           onboardingStep: subAccount.onboardingStep,
           mustSetPassword: true,
           verified: subAccount.verified,
+          teamRole: teamMember.role,
         },
         role: teamMember.role,
         mustSetPassword: true,
@@ -669,13 +671,14 @@ export const acceptTeamInvite = asyncHandler(async (req: Request, res: Response)
   teamMember.acceptedAt = new Date();
   await teamMember.save();
 
-  // Generate JWT with mustSetPassword flag
+  // Generate JWT with mustSetPassword flag and team role
   const { generateToken } = await import('../utils/jwt');
   const jwtToken = generateToken({
     _id: subAccount._id.toString(),
     email: subAccount.email,
     type: 'company',
     mustSetPassword: true,
+    teamRole: teamMember.role,
   });
 
   // Get JWT expiry for frontend
@@ -693,6 +696,7 @@ export const acceptTeamInvite = asyncHandler(async (req: Request, res: Response)
         onboardingStep: subAccount.onboardingStep,
         mustSetPassword: true,
         verified: subAccount.verified,
+        teamRole: teamMember.role,
       },
       role: teamMember.role,
       mustSetPassword: true,

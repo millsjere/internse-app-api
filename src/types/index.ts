@@ -187,6 +187,7 @@ export interface IAuthPayload {
   email: string;
   type: 'user' | 'company' | 'admin';
   mustSetPassword?: boolean;
+  teamRole?: 'admin' | 'recruiter' | 'viewer';
 }
 
 // Admin Types

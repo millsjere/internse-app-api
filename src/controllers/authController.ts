@@ -221,10 +221,16 @@ export const companyLogin = asyncHandler(async (req: Request, res: Response): Pr
     throw new AppError('Your account has been suspended. Please contact support.', 403);
   }
 
+  // Check if this company account is a team member (has a parent company)
+  const { TeamMember } = await import('../models/TeamMember');
+  const teamMembership = await TeamMember.findOne({ email: company.email, status: 'accepted' });
+  const teamRole = teamMembership?.role ?? undefined;
+
   const token = generateToken({
     _id: company._id.toString(),
     email: company.email,
     type: 'company',
+    ...(teamRole ? { teamRole } : {}),
   });
 
   res.cookie('cid_jwt', token, {
@@ -244,6 +250,7 @@ export const companyLogin = asyncHandler(async (req: Request, res: Response): Pr
       ...companyData!.toObject(),
       type: 'company',
       tokenExpiry,
+      ...(teamRole ? { teamRole } : {}),
     },
   });
 });
