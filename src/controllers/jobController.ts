@@ -19,8 +19,15 @@ export const getAllJobs = asyncHandler(async (req: Request, res: Response): Prom
 
   const filter: any = { status: 'published' };
   if (industry) filter.industry = industry;
-  if (jobType) filter.jobType = jobType;
-  if (level) filter.level = level;
+  // Support comma-separated values for OR filtering (e.g. "full-time,contract")
+  if (jobType) {
+    const types = (jobType as string).split(',').map(t => t.trim()).filter(Boolean);
+    filter.jobType = types.length === 1 ? types[0] : { $in: types };
+  }
+  if (level) {
+    const levels = (level as string).split(',').map(l => l.trim()).filter(Boolean);
+    filter.level = levels.length === 1 ? levels[0] : { $in: levels };
+  }
   if (search) {
     filter.$or = [
       { title: { $regex: search, $options: 'i' } },
