@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { protect, protectCompany } from '../middleware/auth';
+import { upload } from '../middleware/upload';
 import {
   getUserProfile,
   updateUserProfile,
@@ -22,6 +23,7 @@ import {
   removeTeamMember,
   acceptTeamInvite,
   setPassword,
+  uploadResume,
 } from '../controllers/userController';
 
 const router = Router();
@@ -30,6 +32,7 @@ const router = Router();
 router.get('/profile', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);
 router.post('/profile/password', protect, changePassword);
+router.patch('/profile/resume', protect, upload.single('resume'), uploadResume);
 
 // Experience routes
 router.post('/profile/experience', protect, addExperience);

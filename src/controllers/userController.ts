@@ -784,6 +784,28 @@ export const removeTeamMember = asyncHandler(async (req: Request, res: Response)
   res.json({ success: true, message: 'Team member removed successfully' });
 });
 
+// Upload resume
+export const uploadResume = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  if (!req.file) {
+    throw new AppError('No file provided', 400);
+  }
+
+  const { CloudinaryService } = await import('../services');
+  const resumeUrl = await CloudinaryService.uploadFile(req.file, 'resumes');
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { resume: resumeUrl },
+    { new: true }
+  ).select('-password');
+
+  res.json({ success: true, data: user });
+});
+
 // Change password
 export const changePassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   if (!req.user) {

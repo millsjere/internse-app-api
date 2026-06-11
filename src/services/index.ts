@@ -1,24 +1,41 @@
 import axios from 'axios';
 import { AppError } from '../middleware/errorHandler';
 import { Resend } from 'resend';
+import { v2 as cloudinary } from 'cloudinary';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@internseapp.com';
 
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 export class CloudinaryService {
-  static async uploadFile(_file: Express.Multer.File, _folder: string): Promise<string> {
-    // Placeholder - implement actual Cloudinary upload
-    // Using cloudinary npm package
-    console.log('Uploading to Cloudinary...', _folder);
-    return 'https://placeholder-url.cloudinary.com/image.jpg';
+  static async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder, resource_type: 'auto' },
+        (error, result) => {
+          if (error) {
+            reject(new AppError('Failed to upload file to Cloudinary', 500));
+          } else {
+            resolve(result?.secure_url || '');
+          }
+        }
+      );
+      stream.end(file.buffer);
+    });
   }
 
-  //this is a placeholder - implement actual Cloudinary delete functionality
-
-  static async deleteFile(_publicId: string): Promise<boolean> {
-    // Placeholder - implement actual Cloudinary delete
-    console.log('Deleting from Cloudinary...', _publicId);
-    return true;
+  static async deleteFile(publicId: string): Promise<boolean> {
+    try {
+      await cloudinary.uploader.destroy(publicId);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
