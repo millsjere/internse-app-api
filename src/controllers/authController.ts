@@ -105,6 +105,7 @@ export const userLogin = asyncHandler(async (req: Request, res: Response): Promi
   res.cookie('uid_jwt', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -236,6 +237,7 @@ export const companyLogin = asyncHandler(async (req: Request, res: Response): Pr
   res.cookie('cid_jwt', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -420,6 +422,7 @@ export const refreshToken = asyncHandler(async (req: Request, res: Response): Pr
   res.cookie(cookieName, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
