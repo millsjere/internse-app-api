@@ -8,6 +8,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   phone?: string;
+  country?: string;
   profilePhoto?: string;
   coverPhoto?: string;
   bio?: string;
@@ -99,6 +100,7 @@ export interface IJob extends Document {
   tags: string[];
   industry: string;
   jobType: 'full-time' | 'part-time' | 'contract' | 'internship';
+  category: 'internship' | 'volunteer' | 'fellowship';
   level: 'entry' | 'mid' | 'senior';
   salary?: {
     min?: number;

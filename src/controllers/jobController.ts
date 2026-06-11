@@ -12,7 +12,7 @@ import { ResendService } from '../services';
 
 // Get all published jobs with pagination and filters
 export const getAllJobs = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { page = 1, limit = 10, industry, jobType, level, search } = req.query;
+  const { page = 1, limit = 10, industry, jobType, level, category, search } = req.query;
   const pageNum = parseInt(page as string) || 1;
   const limitNum = parseInt(limit as string) || 10;
   const skip = (pageNum - 1) * limitNum;
@@ -23,6 +23,10 @@ export const getAllJobs = asyncHandler(async (req: Request, res: Response): Prom
   if (jobType) {
     const types = (jobType as string).split(',').map(t => t.trim()).filter(Boolean);
     filter.jobType = types.length === 1 ? types[0] : { $in: types };
+  }
+  if (category) {
+    const categories = (category as string).split(',').map(c => c.trim()).filter(Boolean);
+    filter.category = categories.length === 1 ? categories[0] : { $in: categories };
   }
   if (level) {
     const levels = (level as string).split(',').map(l => l.trim()).filter(Boolean);
@@ -102,7 +106,7 @@ export const createJob = asyncHandler(async (req: Request, res: Response): Promi
     throw new AppError('Unauthorized', 401);
   }
 
-  const { title, description, requirements, responsibilities, benefits, tags, industry, jobType, level, salary, location, remote, questions } =
+  const { title, description, requirements, responsibilities, benefits, tags, industry, jobType, category, level, salary, location, remote, questions } =
     req.body;
 
   if (!title || !description || !industry) {
@@ -121,6 +125,7 @@ export const createJob = asyncHandler(async (req: Request, res: Response): Promi
     tags: tags || [],
     industry,
     jobType: jobType || 'full-time',
+    category: category || 'internship',
     level: level || 'entry',
     salary: salary || undefined,
     location,

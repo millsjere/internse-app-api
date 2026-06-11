@@ -28,7 +28,7 @@ router.post('/company/login', companyLogin);
 
 // Password reset
 router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.patch('/reset-password', resetPassword);
 
 // Protected routes
 router.get('/me', protect, getCurrentUser);

@@ -33,6 +33,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     phone: String,
+    country: String,
     profilePhoto: String,
     coverPhoto: String,
     bio: String,

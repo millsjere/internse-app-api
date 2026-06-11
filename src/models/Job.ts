@@ -16,6 +16,11 @@ const jobSchema = new Schema<IJob>(
       enum: ['full-time', 'part-time', 'contract', 'internship'],
       default: 'full-time',
     },
+    category: {
+      type: String,
+      enum: ['internship', 'volunteer', 'fellowship'],
+      default: 'internship',
+    },
     level: {
       type: String,
       enum: ['entry', 'mid', 'senior'],

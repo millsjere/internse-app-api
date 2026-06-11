@@ -4,7 +4,7 @@
   "description": "Modern Express API for internseApp job marketplace",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon index.js",
+    "dev": "tsc && nodemon dist/index.js",
     "build": "tsc",
     "start": "node dist/index.js",
     "watch": "tsc --watch",
