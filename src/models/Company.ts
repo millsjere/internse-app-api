@@ -55,8 +55,8 @@ const companySchema = new Schema<ICompany>(
     resetPasswordExpires: Date,
     mustSetPassword: { type: Boolean, default: false },
     paymentPlan: {
-      planType: { type: String, default: 'starter' },
-      credits: { type: Number, default: PLAN_LIMITS.starter.credits },
+      planType: { type: String, default: 'enterprise' },
+      credits: { type: Number, default: -1 }, // -1 = unlimited
       used: { type: Number, default: 0 },
       billingCycle: { type: String, default: 'monthly' },
       currentPeriodStart: { type: Date, default: () => new Date() },
