@@ -303,7 +303,8 @@ export const saveOnboardingProfile = asyncHandler(async (req: Request, res: Resp
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
-  updates.onboardingStep = 'subscription';
+  // Skip subscription step — all accounts default to enterprise
+  updates.onboardingStep = 'complete';
 
   const company = await Company.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true });
   if (!company) throw new AppError('Company not found', 404);
