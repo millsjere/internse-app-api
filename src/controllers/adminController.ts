@@ -45,7 +45,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response): Prom
 });
 
 export const adminLogout = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  res.clearCookie('admin_jwt');
+  res.clearCookie('admin_jwt', process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {});
   res.json({ success: true, message: 'Logged out' });
 });
 

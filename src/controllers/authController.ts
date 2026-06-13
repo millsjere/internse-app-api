@@ -364,8 +364,9 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response): P
 
 // Logout
 export const logout = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  res.clearCookie('uid_jwt');
-  res.clearCookie('cid_jwt');
+  const cookieOpts = process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {};
+  res.clearCookie('uid_jwt', cookieOpts);
+  res.clearCookie('cid_jwt', cookieOpts);
   res.json({ success: true, message: 'Logout successful' });
 });
 
