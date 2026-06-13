@@ -43,6 +43,7 @@ export const updateUserProfile = asyncHandler(async (req: Request, res: Response
     'firstname',
     'lastname',
     'phone',
+    'country',
     'bio',
     'profilePhoto',
     'coverPhoto',
