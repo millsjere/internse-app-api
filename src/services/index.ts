@@ -15,8 +15,11 @@ cloudinary.config({
 export class CloudinaryService {
   static async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
     return new Promise((resolve, reject) => {
+      // Use 'raw' resource type for document uploads (resumes, etc.), 'auto' for others
+      const resourceType = folder === 'resumes' ? 'raw' : 'auto';
+
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'auto' },
+        { folder, resource_type: resourceType },
         (error, result) => {
           if (error) {
             console.error('[Cloudinary] Upload error:', error);
