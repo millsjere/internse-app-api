@@ -797,7 +797,7 @@ export const uploadResume = asyncHandler(async (req: Request, res: Response): Pr
   }
 
   const { CloudinaryService } = await import('../services');
-  const resumeUrl = await CloudinaryService.uploadFile(req.file, 'resumes');
+  const resumeUrl = await CloudinaryService.uploadFile(req.file, 'resumes', req.file.originalname);
 
   const user = await User.findByIdAndUpdate(
     req.user._id,

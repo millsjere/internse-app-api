@@ -13,7 +13,7 @@ cloudinary.config({
 });
 
 export class CloudinaryService {
-  static async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
+  static async uploadFile(file: Express.Multer.File, folder: string, originalname?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       // Use 'raw' resource type for document uploads (resumes, etc.), 'auto' for others
       const resourceType = folder === 'resumes' ? 'raw' : 'auto';
@@ -27,7 +27,13 @@ export class CloudinaryService {
           } else if (!result?.secure_url) {
             reject(new AppError('Cloudinary upload succeeded but returned no URL', 500));
           } else {
-            resolve(result.secure_url);
+            let url = result.secure_url;
+            // Append original file extension for documents (resumes, etc.)
+            if (originalname && folder === 'resumes') {
+              const ext = originalname.substring(originalname.lastIndexOf('.')).toLowerCase();
+              url = `${url}${ext}`;
+            }
+            resolve(url);
           }
         }
       );
