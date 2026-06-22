@@ -19,9 +19,12 @@ export class CloudinaryService {
         { folder, resource_type: 'auto' },
         (error, result) => {
           if (error) {
-            reject(new AppError('Failed to upload file to Cloudinary', 500));
+            console.error('[Cloudinary] Upload error:', error);
+            reject(new AppError(`Failed to upload file to Cloudinary: ${error.message}`, 500));
+          } else if (!result?.secure_url) {
+            reject(new AppError('Cloudinary upload succeeded but returned no URL', 500));
           } else {
-            resolve(result?.secure_url || '');
+            resolve(result.secure_url);
           }
         }
       );
