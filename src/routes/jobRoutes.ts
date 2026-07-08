@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { protect, protectCompany } from '../middleware/auth';
+import { upload } from '../middleware/upload';
 import {
   getAllJobs,
   getJobBySlug,
@@ -27,7 +28,7 @@ router.get('/:slug', getJobBySlug);
 router.post('/:slug/view', trackJobView);
 
 // User job routes (protected)
-router.post('/:jobId/apply', protect, applyToJob);
+router.post('/:jobId/apply', protect, upload.single('resume'), applyToJob);
 router.post('/:jobId/favourite/toggle', protect, toggleFavourite);
 router.get('/user/applications', protect, getUserApplications);
 router.get('/user/favourites', protect, getUserFavourites);

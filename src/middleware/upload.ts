@@ -1,4 +1,5 @@
 import multer from 'multer';
+import { AppError } from './errorHandler';
 
 const storage = multer.memoryStorage();
 
@@ -14,7 +15,7 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type. Allowed: PDF, DOC, DOCX, XLS, XLSX`));
+    cb(new AppError('Invalid file type. Allowed: PDF, DOC, DOCX, XLS, XLSX', 400));
   }
 };
 

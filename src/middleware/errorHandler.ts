@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { MulterError } from 'multer';
 
 export class AppError extends Error {
   public statusCode: number;
@@ -21,6 +22,19 @@ export const errorHandler = (
       success: false,
       status: err.statusCode,
       message: err.message,
+    });
+    return;
+  }
+
+  if (err instanceof MulterError) {
+    const messages: Partial<Record<MulterError['code'], string>> = {
+      LIMIT_FILE_SIZE: 'File is too large. Maximum size is 5MB.',
+      LIMIT_UNEXPECTED_FILE: 'Unexpected file field.',
+    };
+    res.status(400).json({
+      success: false,
+      status: 400,
+      message: messages[err.code] || err.message,
     });
     return;
   }

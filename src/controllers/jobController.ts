@@ -8,7 +8,7 @@ import { UserNotification } from '../models/UserNotification';
 import { User } from '../models/User';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { createSlug } from '../utils/validators';
-import { ResendService } from '../services';
+import { ResendService, CloudinaryService } from '../services';
 
 // Get all published jobs with pagination and filters
 export const getAllJobs = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -295,7 +295,16 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
   }
 
   const { jobId } = req.params;
-  const { resume, coverLetter, answers } = req.body;
+  const { coverLetter } = req.body;
+
+  let submittedAnswers: Array<{ questionId: string; question: string; answer: string }> = [];
+  if (req.body.answers) {
+    try {
+      submittedAnswers = typeof req.body.answers === 'string' ? JSON.parse(req.body.answers) : req.body.answers;
+    } catch {
+      submittedAnswers = [];
+    }
+  }
 
   const job = await Job.findById(jobId).populate<{ company: { _id: string; companyName: string; email: string } }>('company', 'companyName email');
   if (!job) {
@@ -316,7 +325,6 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
   }
 
   // Validate required questions are answered
-  const submittedAnswers: Array<{ questionId: string; question: string; answer: string }> = answers || [];
   for (const q of job.questions) {
     if (q.required) {
       const found = submittedAnswers.find((a) => a.questionId === q._id?.toString());
@@ -324,6 +332,19 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
         throw new AppError(`Answer required: "${q.question}"`, 400);
       }
     }
+  }
+
+  // resumeUrl is used when the applicant is reusing their existing profile resume;
+  // req.file (via multer) is used when they upload a new document for this application.
+  // Resolved last, after all validation, so we don't burn a Cloudinary upload on a request
+  // that's about to be rejected anyway (duplicate application, closed job, missing answers).
+  let resume: string | undefined = req.body.resumeUrl;
+  if (req.file) {
+    resume = await CloudinaryService.uploadFile(req.file, 'resumes', req.file.originalname);
+  }
+
+  if (!resume) {
+    throw new AppError('Resume is required', 400);
   }
 
   // Build answer snapshots (capture question text at time of apply)
