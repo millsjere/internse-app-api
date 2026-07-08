@@ -808,6 +808,34 @@ export const uploadResume = asyncHandler(async (req: Request, res: Response): Pr
   res.json({ success: true, data: user });
 });
 
+// Delete resume
+export const deleteResume = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  const existingUser = await User.findById(req.user._id).select('resume');
+  if (!existingUser?.resume) {
+    throw new AppError('No resume to delete', 400);
+  }
+
+  // Derive the Cloudinary public_id from the stored URL to clean up the stored file
+  // (we append the file extension onto the raw upload URL ourselves, so it must be stripped back off)
+  const match = existingUser.resume.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
+  if (match) {
+    const { CloudinaryService } = await import('../services');
+    await CloudinaryService.deleteFile(match[1], 'raw');
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $unset: { resume: 1 } },
+    { new: true }
+  ).select('-password');
+
+  res.json({ success: true, data: user });
+});
+
 // Change password
 export const changePassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   if (!req.user) {

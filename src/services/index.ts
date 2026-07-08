@@ -41,10 +41,10 @@ export class CloudinaryService {
     });
   }
 
-  static async deleteFile(publicId: string): Promise<boolean> {
+  static async deleteFile(publicId: string, resourceType: 'image' | 'raw' | 'video' = 'image'): Promise<boolean> {
     try {
-      await cloudinary.uploader.destroy(publicId);
-      return true;
+      const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+      return result?.result === 'ok';
     } catch {
       return false;
     }

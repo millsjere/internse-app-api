@@ -24,6 +24,7 @@ import {
   acceptTeamInvite,
   setPassword,
   uploadResume,
+  deleteResume,
 } from '../controllers/userController';
 
 const router = Router();
@@ -33,6 +34,7 @@ router.get('/profile', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);
 router.post('/profile/password', protect, changePassword);
 router.patch('/profile/resume', protect, upload.single('resume'), uploadResume);
+router.delete('/profile/resume', protect, deleteResume);
 
 // Experience routes
 router.post('/profile/experience', protect, addExperience);
