@@ -48,6 +48,17 @@ const jobSchema = new Schema<IJob>(
         {
           question: { type: String, required: true },
           required: { type: Boolean, default: false },
+          type: {
+            type: String,
+            enum: ['text', 'single_choice', 'multi_choice'],
+            default: 'text',
+          },
+          options: { type: [String], default: [] },
+          maxLength: { type: Number },
+          maxLengthUnit: {
+            type: String,
+            enum: ['words', 'characters'],
+          },
         },
       ],
       default: [],

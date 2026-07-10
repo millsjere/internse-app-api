@@ -10,6 +10,58 @@ import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { createSlug } from '../utils/validators';
 import { ResendService, CloudinaryService } from '../services';
 
+const QUESTION_TYPES = ['text', 'single_choice', 'multi_choice'];
+const MAX_LENGTH_UNITS = ['words', 'characters'];
+
+// Validates and normalizes a raw `questions` payload from a create/update job request.
+// Throws AppError on malformed input so bad data never reaches the Job schema.
+function validateQuestions(questions: unknown): Array<{ question: string; required: boolean; type: string; options: string[]; maxLength?: number; maxLengthUnit?: string }> {
+  if (!Array.isArray(questions)) {
+    throw new AppError('Questions must be an array', 400);
+  }
+
+  return questions.map((q) => {
+    if (!q || typeof q.question !== 'string' || !q.question.trim()) {
+      throw new AppError('Each question must have non-empty text', 400);
+    }
+
+    const type = q.type || 'text';
+    if (!QUESTION_TYPES.includes(type)) {
+      throw new AppError(`Invalid question type: ${type}`, 400);
+    }
+
+    let options: string[] = [];
+    if (type === 'single_choice' || type === 'multi_choice') {
+      options = Array.isArray(q.options) ? q.options.map((o: unknown) => String(o).trim()).filter(Boolean) : [];
+      if (options.length < 2) {
+        throw new AppError('Choice questions require at least 2 options', 400);
+      }
+    }
+
+    let maxLength: number | undefined;
+    let maxLengthUnit: string | undefined;
+    if (type === 'text' && q.maxLength != null && q.maxLength !== '') {
+      maxLength = Number(q.maxLength);
+      if (!Number.isFinite(maxLength) || maxLength <= 0 || !Number.isInteger(maxLength)) {
+        throw new AppError('Max length must be a positive whole number', 400);
+      }
+      maxLengthUnit = MAX_LENGTH_UNITS.includes(q.maxLengthUnit) ? q.maxLengthUnit : 'words';
+    }
+
+    return {
+      question: q.question.trim(),
+      required: Boolean(q.required),
+      type,
+      options,
+      ...(maxLength != null ? { maxLength, maxLengthUnit } : {}),
+    };
+  });
+}
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 // Get all published jobs with pagination and filters
 export const getAllJobs = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { page = 1, limit = 10, industry, jobType, level, category, search } = req.query;
@@ -130,7 +182,7 @@ export const createJob = asyncHandler(async (req: Request, res: Response): Promi
     salary: salary || undefined,
     location,
     remote: remote || false,
-    questions: questions || [],
+    questions: questions ? validateQuestions(questions) : [],
     slug,
     status: 'drafted',
   });
@@ -155,7 +207,12 @@ export const updateJob = asyncHandler(async (req: Request, res: Response): Promi
     throw new AppError('Not authorized to update this job', 403);
   }
 
-  const updatedJob = await Job.findByIdAndUpdate(jobId, req.body, { new: true });
+  const updates = { ...req.body };
+  if (updates.questions) {
+    updates.questions = validateQuestions(updates.questions);
+  }
+
+  const updatedJob = await Job.findByIdAndUpdate(jobId, updates, { new: true });
 
   res.json({ success: true, data: updatedJob });
 });
@@ -297,7 +354,7 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
   const { jobId } = req.params;
   const { coverLetter } = req.body;
 
-  let submittedAnswers: Array<{ questionId: string; question: string; answer: string }> = [];
+  let submittedAnswers: Array<{ questionId: string; question: string; answer: string | string[] }> = [];
   if (req.body.answers) {
     try {
       submittedAnswers = typeof req.body.answers === 'string' ? JSON.parse(req.body.answers) : req.body.answers;
@@ -324,12 +381,37 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
     throw new AppError('You have already applied to this job', 409);
   }
 
-  // Validate required questions are answered
+  // Validate answers: required questions must be answered, and choice answers must match defined options
   for (const q of job.questions) {
-    if (q.required) {
-      const found = submittedAnswers.find((a) => a.questionId === q._id?.toString());
-      if (!found || !found.answer.trim()) {
+    const found = submittedAnswers.find((a) => a.questionId === q._id?.toString());
+    const type = q.type || 'text';
+
+    if (type === 'multi_choice') {
+      const selected = Array.isArray(found?.answer) ? found!.answer : [];
+      if (q.required && selected.length === 0) {
         throw new AppError(`Answer required: "${q.question}"`, 400);
+      }
+      if (selected.some((a) => !(q.options ?? []).includes(a))) {
+        throw new AppError(`Invalid option submitted for: "${q.question}"`, 400);
+      }
+    } else if (type === 'single_choice') {
+      const selected = typeof found?.answer === 'string' ? found.answer : '';
+      if (q.required && !selected) {
+        throw new AppError(`Answer required: "${q.question}"`, 400);
+      }
+      if (selected && !(q.options ?? []).includes(selected)) {
+        throw new AppError(`Invalid option submitted for: "${q.question}"`, 400);
+      }
+    } else {
+      const text = typeof found?.answer === 'string' ? found.answer : '';
+      if (q.required && !text.trim()) {
+        throw new AppError(`Answer required: "${q.question}"`, 400);
+      }
+      if (q.maxLength && text.trim()) {
+        const count = q.maxLengthUnit === 'characters' ? text.length : countWords(text);
+        if (count > q.maxLength) {
+          throw new AppError(`"${q.question}" exceeds the ${q.maxLength}-${q.maxLengthUnit === 'characters' ? 'character' : 'word'} limit`, 400);
+        }
       }
     }
   }
@@ -347,13 +429,20 @@ export const applyToJob = asyncHandler(async (req: Request, res: Response): Prom
     throw new AppError('Resume is required', 400);
   }
 
-  // Build answer snapshots (capture question text at time of apply)
+  // Build answer snapshots (capture question text, type, and options at time of apply)
   const answersWithSnapshot = job.questions.map((q) => {
     const submitted = submittedAnswers.find((a) => a.questionId === q._id?.toString());
+    const type = q.type || 'text';
+    const answer: string | string[] = type === 'multi_choice'
+      ? (Array.isArray(submitted?.answer) ? submitted!.answer : [])
+      : (typeof submitted?.answer === 'string' ? submitted.answer : '');
+
     return {
       questionId: q._id?.toString() ?? '',
       question: q.question,
-      answer: submitted?.answer ?? '',
+      type,
+      options: q.options,
+      answer,
     };
   });
 

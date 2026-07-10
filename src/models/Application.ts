@@ -18,7 +18,13 @@ const applicationSchema = new Schema<IApplication>(
         {
           questionId: { type: String, required: true },
           question: { type: String, required: true },
-          answer: { type: String, default: '' },
+          type: {
+            type: String,
+            enum: ['text', 'single_choice', 'multi_choice'],
+            default: 'text',
+          },
+          options: { type: [String], default: [] },
+          answer: { type: Schema.Types.Mixed, default: '' },
         },
       ],
       default: [],

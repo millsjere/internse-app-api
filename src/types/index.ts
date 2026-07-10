@@ -119,6 +119,10 @@ export interface IJob extends Document {
     _id?: ObjectId;
     question: string;
     required: boolean;
+    type?: 'text' | 'single_choice' | 'multi_choice';
+    options?: string[];
+    maxLength?: number;
+    maxLengthUnit?: 'words' | 'characters';
   }>;
   createdAt: Date;
   updatedAt: Date;
@@ -135,7 +139,9 @@ export interface IApplication extends Document {
   answers: Array<{
     questionId: string;
     question: string;
-    answer: string;
+    type?: 'text' | 'single_choice' | 'multi_choice';
+    options?: string[];
+    answer: string | string[];
   }>;
   appliedAt: Date;
   updatedAt: Date;

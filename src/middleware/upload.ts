@@ -4,18 +4,10 @@ import { AppError } from './errorHandler';
 const storage = multer.memoryStorage();
 
 const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedMimes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ];
-
-  if (allowedMimes.includes(file.mimetype)) {
+  if (file.mimetype === 'application/pdf') {
     cb(null, true);
   } else {
-    cb(new AppError('Invalid file type. Allowed: PDF, DOC, DOCX, XLS, XLSX', 400));
+    cb(new AppError('Invalid file type. Only PDF is allowed', 400));
   }
 };
 
