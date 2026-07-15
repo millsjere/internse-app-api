@@ -225,6 +225,123 @@ export class ResendService {
       html,
     });
   }
+
+  static async sendVerificationApprovedEmail(email: string, companyName: string): Promise<void> {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f0fdf4; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <div style="background-color: #10b981; color: white; width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 32px;">✓</div>
+          <h1 style="color: #059669; font-size: 24px; margin: 0;">Verification Approved!</h1>
+        </div>
+
+        <div style="background-color: white; padding: 30px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+            Great news! Your business registration has been verified and approved.
+          </p>
+
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            <strong>${companyName}</strong> is now approved to post job listings on Internse.
+          </p>
+
+          <div style="text-align: center; margin-bottom: 25px;">
+            <a href="${process.env.CLIENT_URL}/employer/jobs/post" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
+              Post Your First Job
+            </a>
+          </div>
+
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0; line-height: 1.5;">
+              <strong style="color: #374151;">What's next?</strong><br/>
+              Log into your dashboard and start posting job listings to attract top talent.
+            </p>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+            If you have any questions, feel free to reach out to our support team at support@internse.com
+          </p>
+        </div>
+
+        <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
+          <p style="margin: 0;">
+            © Internse. All rights reserved.
+          </p>
+        </div>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: '✓ Your Internse Business Verification is Approved',
+      html,
+    });
+  }
+
+  static async sendVerificationRejectedEmail(
+    email: string,
+    companyName: string,
+    rejectionReason: string,
+    adminNotes?: string
+  ): Promise<void> {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fef2f2; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <div style="background-color: #ef4444; color: white; width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 32px;">!</div>
+          <h1 style="color: #dc2626; font-size: 24px; margin: 0;">Verification Status</h1>
+        </div>
+
+        <div style="background-color: white; padding: 30px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
+            Thank you for submitting your business registration for verification.
+          </p>
+
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Unfortunately, your verification could not be approved at this time.
+          </p>
+
+          <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+            <p style="color: #7f1d1d; font-size: 14px; margin: 0 0 5px 0; font-weight: bold;">Reason:</p>
+            <p style="color: #991b1b; font-size: 14px; margin: 0; line-height: 1.5;">
+              ${rejectionReason}
+            </p>
+            ${adminNotes ? `
+              <p style="color: #7f1d1d; font-size: 14px; margin: 10px 0 0 0; font-weight: bold;">Admin Notes:</p>
+              <p style="color: #991b1b; font-size: 14px; margin: 5px 0 0 0; line-height: 1.5;">
+                ${adminNotes}
+              </p>
+            ` : ''}
+          </div>
+
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Please review the feedback above and resubmit your documents with any corrections or additional information.
+          </p>
+
+          <div style="text-align: center; margin-bottom: 25px;">
+            <a href="${process.env.CLIENT_URL}/employer/verification" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
+              Resubmit Verification
+            </a>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+            If you need assistance or have questions, please contact our support team at <strong>support@internse.com</strong>
+          </p>
+        </div>
+
+        <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
+          <p style="margin: 0;">
+            © Internse. All rights reserved.
+          </p>
+        </div>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: 'Internse Business Verification - Action Required',
+      html,
+    });
+  }
 }
 
 export class PaystackService {

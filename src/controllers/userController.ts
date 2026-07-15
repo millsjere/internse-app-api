@@ -8,7 +8,7 @@ import { TeamMember } from '../models/TeamMember';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { calculateProfileCompletion, calculateCompanyProfileCompletion } from '../utils/profile';
 import { getTokenExpiry } from '../utils/jwt';
-import { PaystackService, ResendService } from '../services/index';
+import { PaystackService, ResendService, CloudinaryService } from '../services/index';
 
 async function generateInvoiceNumber(): Promise<string> {
   const count = await Payment.countDocuments();
@@ -866,4 +866,105 @@ export const changePassword = asyncHandler(async (req: Request, res: Response): 
   await (user as any).save();
 
   res.json({ success: true, message: 'Password changed successfully' });
+});
+
+// Upload business registration document
+export const uploadBusinessDocument = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  const company = await Company.findById(req.user._id);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  if (!req.file) {
+    throw new AppError('No file provided', 400);
+  }
+
+  // Validate file type
+  if (req.file.mimetype !== 'application/pdf') {
+    throw new AppError('Only PDF files are allowed', 400);
+  }
+
+  // Validate file size (max 5MB)
+  if (req.file.size > 5 * 1024 * 1024) {
+    throw new AppError('File size must be less than 5MB', 400);
+  }
+
+  try {
+    // Upload to Cloudinary with 'raw' resource type for PDFs
+    const documentUrl = await CloudinaryService.uploadFile(
+      req.file,
+      'business_registrations',
+      req.file.originalname
+    );
+
+    res.json({
+      success: true,
+      message: 'Document uploaded successfully',
+      data: { documentUrl },
+    });
+  } catch (error: any) {
+    throw new AppError(error.message || 'Failed to upload document', 500);
+  }
+});
+
+// Submit business verification document
+export const submitBusinessVerification = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  const company = await Company.findById(req.user._id);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  const { registrationNumber, registrationDocument } = req.body;
+
+  if (!registrationNumber || !registrationDocument) {
+    throw new AppError('Registration number and document URL are required', 400);
+  }
+
+  company.businessVerification = {
+    ...company.businessVerification,
+    status: 'pending',
+    registrationNumber,
+    registrationDocument,
+    submittedAt: new Date(),
+  };
+
+  await company.save();
+
+  res.json({
+    success: true,
+    message: 'Business verification submitted. Awaiting admin approval.',
+    data: company.businessVerification,
+  });
+});
+
+// Get verification status
+export const getVerificationStatus = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  const company = await Company.findById(req.user._id).select('businessVerification canPostJobs');
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  res.json({
+    success: true,
+    data: {
+      status: company.businessVerification.status,
+      canPostJobs: company.canPostJobs,
+      rejectionReason: company.businessVerification.rejectionReason,
+      submittedAt: company.businessVerification.submittedAt,
+      verifiedAt: company.businessVerification.verifiedAt,
+      adminNotes: company.businessVerification.adminNotes,
+    },
+  });
 });

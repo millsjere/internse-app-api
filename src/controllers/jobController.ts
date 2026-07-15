@@ -10,7 +10,7 @@ import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { createSlug } from '../utils/validators';
 import { ResendService, CloudinaryService } from '../services';
 
-const QUESTION_TYPES = ['text', 'single_choice', 'multi_choice'];
+const QUESTION_TYPES = ['text', 'paragraph', 'single_choice', 'multi_choice', 'dropdown', 'date'];
 const MAX_LENGTH_UNITS = ['words', 'characters'];
 
 // Validates and normalizes a raw `questions` payload from a create/update job request.
@@ -31,16 +31,16 @@ function validateQuestions(questions: unknown): Array<{ question: string; requir
     }
 
     let options: string[] = [];
-    if (type === 'single_choice' || type === 'multi_choice') {
+    if (type === 'single_choice' || type === 'multi_choice' || type === 'dropdown') {
       options = Array.isArray(q.options) ? q.options.map((o: unknown) => String(o).trim()).filter(Boolean) : [];
       if (options.length < 2) {
-        throw new AppError('Choice questions require at least 2 options', 400);
+        throw new AppError(`${type} questions require at least 2 options`, 400);
       }
     }
 
     let maxLength: number | undefined;
     let maxLengthUnit: string | undefined;
-    if (type === 'text' && q.maxLength != null && q.maxLength !== '') {
+    if ((type === 'text' || type === 'paragraph') && q.maxLength != null && q.maxLength !== '') {
       maxLength = Number(q.maxLength);
       if (!Number.isFinite(maxLength) || maxLength <= 0 || !Number.isInteger(maxLength)) {
         throw new AppError('Max length must be a positive whole number', 400);
@@ -158,6 +158,27 @@ export const createJob = asyncHandler(async (req: Request, res: Response): Promi
     throw new AppError('Unauthorized', 401);
   }
 
+  // Check company verification status
+  const company = await Company.findById(req.user._id);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  if (company.businessVerification.status !== 'approved') {
+    throw new AppError(
+      company.businessVerification.status === 'pending'
+        ? 'Your company is pending verification. Please wait for admin approval before posting jobs.'
+        : company.businessVerification.status === 'rejected'
+        ? `Your company verification was rejected: ${company.businessVerification.rejectionReason || 'Please contact support.'}`
+        : 'Please submit your business registration for verification before posting jobs.',
+      403
+    );
+  }
+
+  if (!company.canPostJobs) {
+    throw new AppError('You are not authorized to post jobs. Please complete verification.', 403);
+  }
+
   const { title, description, requirements, responsibilities, benefits, tags, industry, jobType, category, level, salary, location, remote, questions } =
     req.body;
 
@@ -234,14 +255,30 @@ export const publishJob = asyncHandler(async (req: Request, res: Response): Prom
     throw new AppError('Not authorized to publish this job', 403);
   }
 
+  // Check company verification status
+  const company = await Company.findById(req.user._id);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  if (company.businessVerification.status !== 'approved') {
+    throw new AppError(
+      company.businessVerification.status === 'pending'
+        ? 'Your company is pending verification. Please wait for admin approval before publishing jobs.'
+        : company.businessVerification.status === 'rejected'
+        ? `Your company verification was rejected: ${company.businessVerification.rejectionReason || 'Please contact support.'}`
+        : 'Please submit your business registration for verification before publishing jobs.',
+      403
+    );
+  }
+
+  if (!company.canPostJobs) {
+    throw new AppError('You are not authorized to publish jobs. Please complete verification.', 403);
+  }
+
   // Deduct a credit only when publishing from drafted for the first time.
   // Re-publishing a closed job does not cost another credit.
   if (job.status === 'drafted') {
-    const company = await Company.findById(req.user._id);
-    if (!company) {
-      throw new AppError('Company not found', 404);
-    }
-
     const plan = company.paymentPlan;
     const planLimits = PLAN_LIMITS[plan.planType as keyof typeof PLAN_LIMITS];
 

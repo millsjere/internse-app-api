@@ -69,6 +69,22 @@ const companySchema = new Schema<ICompany>(
     },
     pendingPlanType: { type: String },
     pendingBillingCycle: { type: String },
+    businessVerification: {
+      status: {
+        type: String,
+        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        default: 'not_submitted',
+      },
+      registrationDocument: String, // URL to uploaded document
+      registrationNumber: String,
+      verifiedAt: Date,
+      rejectionReason: String,
+      submittedAt: Date,
+      reviewedBy: { type: Schema.Types.ObjectId, ref: 'Admin' },
+      reviewedAt: Date,
+      adminNotes: String,
+    },
+    canPostJobs: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

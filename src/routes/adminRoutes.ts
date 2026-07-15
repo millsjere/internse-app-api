@@ -7,6 +7,7 @@ import {
   listCompanies, getCompanyDetail, adminCreateCompany, verifyCompany, suspendCompany, activateCompany, deleteCompany,
   listAllJobs, getJobDetail, forceCloseJob, toggleFeaturedJob, adminDeleteJob,
   listPlanConfigs, getPublicPlans, createPlanConfig, updatePlanConfig, deletePlanConfig,
+  getPendingVerifications, approveCompanyVerification, rejectCompanyVerification,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -52,5 +53,9 @@ router.post('/plans', protectAdmin, createPlanConfig);
 router.put('/plans/:id', protectAdmin, updatePlanConfig);
 router.delete('/plans/:id', protectAdmin, deletePlanConfig);
 
+// Business Verification
+router.get('/verifications/pending', protectAdmin, getPendingVerifications);
+router.patch('/verifications/:companyId/approve', protectAdmin, approveCompanyVerification);
+router.patch('/verifications/:companyId/reject', protectAdmin, rejectCompanyVerification);
 
 export default router;

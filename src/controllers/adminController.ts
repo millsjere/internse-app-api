@@ -471,3 +471,91 @@ export const sendDirectEmail = asyncHandler(async (req: Request, res: Response):
   res.json({ success: true, message: `Email sent to ${email}` });
 });
 
+// ─── Business Verification ──────────────────────────────────────────────────
+
+// Get pending verifications
+export const getPendingVerifications = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
+  const companies = await Company.find({ 'businessVerification.status': 'pending' })
+    .select('companyName email businessVerification createdAt')
+    .sort({ 'businessVerification.submittedAt': -1 });
+
+  res.json({
+    success: true,
+    data: companies,
+    total: companies.length,
+  });
+});
+
+// Approve company verification
+export const approveCompanyVerification = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { companyId } = req.params;
+  const { adminNotes } = req.body;
+
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  company.businessVerification = {
+    ...company.businessVerification,
+    status: 'approved',
+    verifiedAt: new Date(),
+    reviewedBy: req.user!._id as any,
+    reviewedAt: new Date(),
+    adminNotes: adminNotes || '',
+  };
+  company.canPostJobs = true;
+
+  await company.save();
+
+  // Send approval email
+  await ResendService.sendVerificationApprovedEmail(company.email, company.companyName);
+
+  res.json({
+    success: true,
+    message: 'Company verified and approved',
+    data: company.businessVerification,
+  });
+});
+
+// Reject company verification
+export const rejectCompanyVerification = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { companyId } = req.params;
+  const { rejectionReason, adminNotes } = req.body;
+
+  if (!rejectionReason) {
+    throw new AppError('Rejection reason is required', 400);
+  }
+
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  company.businessVerification = {
+    ...company.businessVerification,
+    status: 'rejected',
+    rejectionReason,
+    reviewedBy: req.user!._id as any,
+    reviewedAt: new Date(),
+    adminNotes: adminNotes || '',
+  };
+  company.canPostJobs = false;
+
+  await company.save();
+
+  // Send rejection email
+  await ResendService.sendVerificationRejectedEmail(
+    company.email,
+    company.companyName,
+    rejectionReason,
+    adminNotes || undefined
+  );
+
+  res.json({
+    success: true,
+    message: 'Company verification rejected',
+    data: company.businessVerification,
+  });
+});
+

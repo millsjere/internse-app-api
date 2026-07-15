@@ -14,7 +14,9 @@
     "type-check": "tsc --noEmit",
     "create-test-accounts": "node dist/scripts/create-test-accounts.js",
     "migrate:plans": "node dist/scripts/migrate-plans.js",
-    "seed:admin": "node dist/scripts/seed-admin.js"
+    "seed:admin": "node dist/scripts/seed-admin.js",
+    "migrate:require-verification": "node dist/scripts/require-verification.js",
+    "notify:verification-required": "node dist/scripts/notify-verification-required.js"
   },
   "keywords": [],
   "author": "",

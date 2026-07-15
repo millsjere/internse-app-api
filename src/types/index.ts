@@ -83,6 +83,18 @@ export interface ICompany extends Document {
   };
   pendingPlanType?: string;
   pendingBillingCycle?: string;
+  businessVerification: {
+    status: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+    registrationDocument?: string;
+    registrationNumber?: string;
+    verifiedAt?: Date;
+    rejectionReason?: string;
+    submittedAt?: Date;
+    reviewedBy?: ObjectId;
+    reviewedAt?: Date;
+    adminNotes?: string;
+  };
+  canPostJobs: boolean;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;

@@ -25,6 +25,9 @@ import {
   setPassword,
   uploadResume,
   deleteResume,
+  uploadBusinessDocument,
+  submitBusinessVerification,
+  getVerificationStatus,
 } from '../controllers/userController';
 
 const router = Router();
@@ -68,5 +71,10 @@ router.post('/company/set-password', protectCompany, setPassword);
 
 // Paystack webhook (no auth — verified by signature)
 router.post('/company/webhook/paystack', paystackWebhook);
+
+// Business verification routes
+router.post('/company/verification/upload', protectCompany, upload.single('document'), uploadBusinessDocument);
+router.post('/company/verification/submit', protectCompany, submitBusinessVerification);
+router.get('/company/verification/status', protectCompany, getVerificationStatus);
 
 export default router;
