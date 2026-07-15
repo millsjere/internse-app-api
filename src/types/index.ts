@@ -119,7 +119,7 @@ export interface IJob extends Document {
     _id?: ObjectId;
     question: string;
     required: boolean;
-    type?: 'text' | 'single_choice' | 'multi_choice';
+    type?: 'text' | 'paragraph' | 'single_choice' | 'multi_choice' | 'dropdown' | 'date';
     options?: string[];
     maxLength?: number;
     maxLengthUnit?: 'words' | 'characters';
@@ -139,7 +139,7 @@ export interface IApplication extends Document {
   answers: Array<{
     questionId: string;
     question: string;
-    type?: 'text' | 'single_choice' | 'multi_choice';
+    type?: 'text' | 'paragraph' | 'single_choice' | 'multi_choice' | 'dropdown' | 'date';
     options?: string[];
     answer: string | string[];
   }>;

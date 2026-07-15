@@ -50,7 +50,7 @@ const jobSchema = new Schema<IJob>(
           required: { type: Boolean, default: false },
           type: {
             type: String,
-            enum: ['text', 'single_choice', 'multi_choice'],
+            enum: ['text', 'paragraph', 'single_choice', 'multi_choice', 'dropdown', 'date'],
             default: 'text',
           },
           options: { type: [String], default: [] },

@@ -20,7 +20,7 @@ const applicationSchema = new Schema<IApplication>(
           question: { type: String, required: true },
           type: {
             type: String,
-            enum: ['text', 'single_choice', 'multi_choice'],
+            enum: ['text', 'paragraph', 'single_choice', 'multi_choice', 'dropdown', 'date'],
             default: 'text',
           },
           options: { type: [String], default: [] },
