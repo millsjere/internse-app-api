@@ -569,11 +569,108 @@ export const getJobApplications = asyncHandler(
       throw new AppError('Not authorized to view applications', 403);
     }
 
-    const applications = await Application.find({ job: jobId })
-      .populate('applicant', 'firstname lastname email phone profilePhoto')
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const status = req.query.status as string | undefined;
+
+    const filter: Record<string, unknown> = { job: jobId };
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    const [applications, total, statusCounts] = await Promise.all([
+      Application.find(filter)
+        .populate('applicant', 'firstname lastname email phone profilePhoto')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Application.countDocuments(filter),
+      Application.aggregate([
+        { $match: { job: job._id } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const counts = { all: 0, pending: 0, reviewing: 0, accepted: 0, rejected: 0 };
+    statusCounts.forEach((s: { _id: string; count: number }) => {
+      counts.all += s.count;
+      if (s._id in counts) counts[s._id as keyof typeof counts] = s.count;
+    });
+
+    res.json({
+      success: true,
+      data: applications,
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+      counts,
+    });
+  }
+);
+
+// Export job applications as CSV (for employer)
+export const exportJobApplications = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { jobId } = req.params;
+
+    const job = await Job.findById(jobId);
+    if (!job) {
+      throw new AppError('Job not found', 404);
+    }
+
+    if (job.company.toString() !== req.user._id) {
+      throw new AppError('Not authorized to view applications', 403);
+    }
+
+    const status = req.query.status as string | undefined;
+    const filter: Record<string, unknown> = { job: jobId };
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    const applications = await Application.find(filter)
+      .populate('applicant', 'firstname lastname email phone')
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, data: applications });
+    const escapeCsv = (value: unknown): string => {
+      const str = value === null || value === undefined ? '' : String(value);
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+
+    const questionColumns = job.questions.map((q) => ({ id: String(q._id), label: q.question }));
+
+    const headers = [
+      'Name', 'Email', 'Phone', 'Status', 'Applied Date', 'Resume', 'Cover Letter',
+      ...questionColumns.map((q) => q.label),
+    ];
+
+    const rows = applications.map((app) => {
+      const applicant = app.applicant as unknown as { firstname?: string; lastname?: string; email?: string; phone?: string } | undefined;
+      const answerByQuestionId = new Map(
+        (app.answers || []).map((a) => [a.questionId, Array.isArray(a.answer) ? a.answer.join('; ') : a.answer])
+      );
+      return [
+        applicant ? `${applicant.firstname ?? ''} ${applicant.lastname ?? ''}`.trim() : '',
+        applicant?.email ?? '',
+        applicant?.phone ?? '',
+        app.status,
+        app.appliedAt ? new Date(app.appliedAt).toISOString() : '',
+        app.resume ?? '',
+        app.coverLetter ?? '',
+        ...questionColumns.map((q) => answerByQuestionId.get(q.id) ?? ''),
+      ]
+        .map(escapeCsv)
+        .join(',');
+    });
+
+    const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
+    const filename = `applicants-${createSlug(job.title)}-${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(`﻿${csv}`);
   }
 );
 

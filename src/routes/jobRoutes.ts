@@ -15,6 +15,7 @@ import {
   applyToJob,
   getUserApplications,
   getJobApplications,
+  exportJobApplications,
   toggleFavourite,
   getUserFavourites,
   updateApplicationStatus,
@@ -42,6 +43,7 @@ router.post('/:jobId/close', protectCompany, closeJob);
 router.post('/:jobId/archive', protectCompany, archiveJob);
 router.delete('/:jobId', protectCompany, deleteJob);
 router.get('/:jobId/applications', protectCompany, getJobApplications);
+router.get('/:jobId/applications/export', protectCompany, exportJobApplications);
 router.patch('/company/applications/:applicationId/status', protectCompany, updateApplicationStatus);
 
 export default router;
