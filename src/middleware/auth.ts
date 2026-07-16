@@ -53,6 +53,19 @@ export const protectCompany = (req: Request, res: Response, next: NextFunction):
   }
 };
 
+// Must run after protectCompany. Accounts with no teamRole are company owners and are
+// always allowed; team members are restricted to the given roles.
+export const requireCompanyRole = (allowedRoles: Array<'admin' | 'recruiter' | 'viewer'>) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const teamRole = req.user?.teamRole;
+    if (!teamRole || allowedRoles.includes(teamRole)) {
+      next();
+      return;
+    }
+    res.status(403).json({ success: false, message: 'You do not have permission to perform this action' });
+  };
+};
+
 export const protectAdmin = (req: Request, res: Response, next: NextFunction): void => {
   try {
     const token = req.cookies?.admin_jwt || req.headers.authorization?.split(' ')[1];

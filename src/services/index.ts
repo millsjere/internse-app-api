@@ -8,7 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@internseapp.com';
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
@@ -16,8 +16,8 @@ cloudinary.config({
 export class CloudinaryService {
   static async uploadFile(file: Express.Multer.File, folder: string, originalname?: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Use 'raw' resource type for document uploads (resumes, etc.), 'auto' for others
-      const resourceType = folder === 'resumes' ? 'raw' : 'auto';
+      // Use 'raw' resource type for document uploads (PDFs, etc.), 'auto' for images/others
+      const resourceType = file.mimetype === 'application/pdf' ? 'raw' : 'auto';
 
       // For raw uploads, Cloudinary has no separate "format" concept — the extension
       // must be part of the public_id we request, or the delivered URL won't resolve.

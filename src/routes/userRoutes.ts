@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, protectCompany } from '../middleware/auth';
+import { protect, protectCompany, requireCompanyRole } from '../middleware/auth';
 import { upload } from '../middleware/upload';
 import {
   getUserProfile,
@@ -49,10 +49,10 @@ router.post('/profile/education', protect, addEducation);
 router.put('/profile/education/:educationId', protect, updateEducation);
 router.delete('/profile/education/:educationId', protect, deleteEducation);
 
-// Company routes (protected)
-router.get('/company/profile', protectCompany, getCompanyProfile);
-router.put('/company/profile', protectCompany, updateCompanyProfile);
-router.post('/company/password', protectCompany, changePassword);
+// Company routes (protected) — Settings pages are admin-only for team members
+router.get('/company/profile', protectCompany, requireCompanyRole(['admin']), getCompanyProfile);
+router.put('/company/profile', protectCompany, requireCompanyRole(['admin']), updateCompanyProfile);
+router.post('/company/password', protectCompany, requireCompanyRole(['admin']), changePassword);
 
 // Onboarding routes
 router.put('/company/onboarding/profile', protectCompany, saveOnboardingProfile);
@@ -60,12 +60,12 @@ router.post('/company/onboarding/plan', protectCompany, selectPlan);
 router.get('/company/onboarding/verify', protectCompany, verifyPayment);
 
 // Billing history
-router.get('/company/billing', protectCompany, getBillingHistory);
+router.get('/company/billing', protectCompany, requireCompanyRole(['admin']), getBillingHistory);
 
 // Invite team member
-router.post('/company/invite-team-member', protectCompany, inviteTeamMember);
-router.get('/company/team-members', protectCompany, getTeamMembers);
-router.delete('/company/team-members/:memberId', protectCompany, removeTeamMember);
+router.post('/company/invite-team-member', protectCompany, requireCompanyRole(['admin']), inviteTeamMember);
+router.get('/company/team-members', protectCompany, requireCompanyRole(['admin']), getTeamMembers);
+router.delete('/company/team-members/:memberId', protectCompany, requireCompanyRole(['admin']), removeTeamMember);
 router.get('/team-invite/accept', acceptTeamInvite);
 router.post('/company/set-password', protectCompany, setPassword);
 
@@ -73,8 +73,8 @@ router.post('/company/set-password', protectCompany, setPassword);
 router.post('/company/webhook/paystack', paystackWebhook);
 
 // Business verification routes
-router.post('/company/verification/upload', protectCompany, upload.single('document'), uploadBusinessDocument);
-router.post('/company/verification/submit', protectCompany, submitBusinessVerification);
-router.get('/company/verification/status', protectCompany, getVerificationStatus);
+router.post('/company/verification/upload', protectCompany, requireCompanyRole(['admin']), upload.single('document'), uploadBusinessDocument);
+router.post('/company/verification/submit', protectCompany, requireCompanyRole(['admin']), submitBusinessVerification);
+router.get('/company/verification/status', protectCompany, requireCompanyRole(['admin']), getVerificationStatus);
 
 export default router;

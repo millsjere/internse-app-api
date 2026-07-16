@@ -379,8 +379,14 @@ export const getCurrentUser = asyncHandler(async (req: Request, res: Response): 
   const { _id, type } = req.user;
 
   let user;
+  let teamRole: 'admin' | 'recruiter' | 'viewer' | undefined;
   if (type === 'company') {
     user = await Company.findById(_id).select('-password');
+    if (user) {
+      const { TeamMember } = await import('../models/TeamMember');
+      const teamMembership = await TeamMember.findOne({ email: user.email, status: 'accepted' });
+      teamRole = teamMembership?.role ?? undefined;
+    }
   } else {
     user = await User.findById(_id).select('-password');
   }
@@ -401,6 +407,7 @@ export const getCurrentUser = asyncHandler(async (req: Request, res: Response): 
       ...user.toObject(),
       type, // Include type so frontend knows if it's a company or user
       tokenExpiry,
+      ...(teamRole ? { teamRole } : {}),
     },
   });
 });
