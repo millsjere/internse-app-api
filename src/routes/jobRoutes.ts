@@ -19,6 +19,7 @@ import {
   toggleFavourite,
   getUserFavourites,
   updateApplicationStatus,
+  downloadApplicationResume,
 } from '../controllers/jobController';
 
 const router = Router();
@@ -45,5 +46,6 @@ router.delete('/:jobId', protectCompany, deleteJob);
 router.get('/:jobId/applications', protectCompany, getJobApplications);
 router.get('/:jobId/applications/export', protectCompany, exportJobApplications);
 router.patch('/company/applications/:applicationId/status', protectCompany, updateApplicationStatus);
+router.get('/company/applications/:applicationId/resume', protectCompany, downloadApplicationResume);
 
 export default router;

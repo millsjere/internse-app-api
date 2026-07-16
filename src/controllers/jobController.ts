@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
 import { Job } from '../models/Job';
 import { Company, PLAN_LIMITS } from '../models/Company';
 import { Application } from '../models/Application';
@@ -719,6 +720,46 @@ export const getUserFavourites = asyncHandler(
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: favourites });
+  }
+);
+
+// Download applicant resume (company only) — proxied through the backend so we
+// control the Content-Disposition filename instead of relying on the raw Cloudinary URL
+export const downloadApplicationResume = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { applicationId } = req.params;
+
+    const application = await Application.findById(applicationId)
+      .populate<{ job: { company: string } }>('job', 'company')
+      .populate<{ applicant: { firstname: string; lastname: string } }>('applicant', 'firstname lastname');
+
+    if (!application) {
+      throw new AppError('Application not found', 404);
+    }
+
+    if ((application.job as unknown as { company: string }).company.toString() !== req.user._id) {
+      throw new AppError('Not authorized', 403);
+    }
+
+    if (!application.resume) {
+      throw new AppError('No resume on file for this application', 404);
+    }
+
+    const applicant = application.applicant as unknown as { firstname?: string; lastname?: string };
+    const safeName = `${applicant?.firstname ?? ''}_${applicant?.lastname ?? ''}`
+      .trim()
+      .replace(/^_+|_+$/g, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '') || 'Applicant';
+
+    const upstream = await axios.get(application.resume, { responseType: 'stream' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}-Resume.pdf"`);
+    upstream.data.pipe(res);
   }
 );
 
