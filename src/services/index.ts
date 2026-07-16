@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { randomUUID } from 'crypto';
 import { AppError } from '../middleware/errorHandler';
 import { Resend } from 'resend';
 import { v2 as cloudinary } from 'cloudinary';
@@ -18,25 +19,24 @@ export class CloudinaryService {
       // Use 'raw' resource type for document uploads (resumes, etc.), 'auto' for others
       const resourceType = folder === 'resumes' ? 'raw' : 'auto';
 
-      const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: resourceType },
-        (error, result) => {
-          if (error) {
-            console.error('[Cloudinary] Upload error:', error);
-            reject(new AppError(`Failed to upload file to Cloudinary: ${error.message}`, 500));
-          } else if (!result?.secure_url) {
-            reject(new AppError('Cloudinary upload succeeded but returned no URL', 500));
-          } else {
-            let url = result.secure_url;
-            // Append original file extension for documents (resumes, etc.)
-            if (originalname && folder === 'resumes') {
-              const ext = originalname.substring(originalname.lastIndexOf('.')).toLowerCase();
-              url = `${url}${ext}`;
-            }
-            resolve(url);
-          }
+      // For raw uploads, Cloudinary has no separate "format" concept — the extension
+      // must be part of the public_id we request, or the delivered URL won't resolve.
+      const options: Record<string, unknown> = { folder, resource_type: resourceType };
+      if (resourceType === 'raw' && originalname) {
+        const ext = originalname.substring(originalname.lastIndexOf('.')).toLowerCase();
+        options.public_id = `${randomUUID()}${ext}`;
+      }
+
+      const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+        if (error) {
+          console.error('[Cloudinary] Upload error:', error);
+          reject(new AppError(`Failed to upload file to Cloudinary: ${error.message}`, 500));
+        } else if (!result?.secure_url) {
+          reject(new AppError('Cloudinary upload succeeded but returned no URL', 500));
+        } else {
+          resolve(result.secure_url);
         }
-      );
+      });
       stream.end(file.buffer);
     });
   }

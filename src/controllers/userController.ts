@@ -820,8 +820,8 @@ export const deleteResume = asyncHandler(async (req: Request, res: Response): Pr
   }
 
   // Derive the Cloudinary public_id from the stored URL to clean up the stored file
-  // (we append the file extension onto the raw upload URL ourselves, so it must be stripped back off)
-  const match = existingUser.resume.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
+  // (the extension is part of the public_id for 'raw' resources, so it must be kept)
+  const match = existingUser.resume.match(/\/upload\/(?:v\d+\/)?(.+)$/);
   if (match) {
     const { CloudinaryService } = await import('../services');
     await CloudinaryService.deleteFile(match[1], 'raw');
