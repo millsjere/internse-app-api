@@ -659,7 +659,7 @@ export const getJobApplications = asyncHandler(
     const [applications, total, statusCounts] = await Promise.all([
       Application.find(filter)
         .populate('applicant', 'firstname lastname email phone profilePhoto')
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
       Application.countDocuments(filter),
@@ -710,7 +710,7 @@ export const exportJobApplications = asyncHandler(
 
     let applicationsQuery = Application.find(filter)
       .populate('applicant', 'firstname lastname email phone')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1, _id: -1 });
     if (page && limit) {
       applicationsQuery = applicationsQuery.skip((page - 1) * limit).limit(limit);
     }
@@ -728,17 +728,25 @@ export const exportJobApplications = asyncHandler(
       ...questionColumns.map((q) => q.label),
     ];
 
+    const toIsoString = (value: unknown): string => {
+      if (!value) return '';
+      const date = new Date(value as string | number | Date);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+    };
+
     const rows = applications.map((app) => {
       const applicant = app.applicant as unknown as { firstname?: string; lastname?: string; email?: string; phone?: string } | undefined;
       const answerByQuestionId = new Map(
-        (app.answers || []).map((a) => [a.questionId, Array.isArray(a.answer) ? a.answer.join('; ') : a.answer])
+        (app.answers || [])
+          .filter((a): a is NonNullable<typeof a> => !!a && typeof a.questionId === 'string')
+          .map((a) => [a.questionId, Array.isArray(a.answer) ? a.answer.join('; ') : a.answer])
       );
       return [
         applicant ? `${applicant.firstname ?? ''} ${applicant.lastname ?? ''}`.trim() : '',
         applicant?.email ?? '',
         applicant?.phone ?? '',
         app.status,
-        app.appliedAt ? new Date(app.appliedAt).toISOString() : '',
+        toIsoString(app.appliedAt),
         app.resume ?? '',
         app.coverLetter ?? '',
         ...questionColumns.map((q) => answerByQuestionId.get(q.id) ?? ''),
