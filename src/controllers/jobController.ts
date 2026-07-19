@@ -552,6 +552,64 @@ export const getUserApplications = asyncHandler(
   }
 );
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Builds the Mongo filter for an employer's job applications from query params.
+// `includeStatus: false` omits the status clause, used for computing tab counts
+// that should reflect search/date/answer filters but not the currently selected tab.
+async function buildApplicationFilter(
+  jobId: unknown,
+  query: Record<string, unknown>,
+  options: { includeStatus?: boolean } = {}
+): Promise<Record<string, unknown>> {
+  const filter: Record<string, unknown> = { job: jobId };
+
+  if (options.includeStatus !== false) {
+    const status = query.status as string | undefined;
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+  }
+
+  const search = (query.search as string | undefined)?.trim();
+  if (search) {
+    const tokens = search.split(/\s+/).filter(Boolean).slice(0, 5);
+    const matchingUsers = await User.find({
+      $and: tokens.map((token) => ({
+        $or: [
+          { firstname: { $regex: escapeRegex(token), $options: 'i' } },
+          { lastname: { $regex: escapeRegex(token), $options: 'i' } },
+          { email: { $regex: escapeRegex(token), $options: 'i' } },
+        ],
+      })),
+    }).select('_id');
+    filter.applicant = { $in: matchingUsers.map((u) => u._id) };
+  }
+
+  const dateFrom = query.dateFrom as string | undefined;
+  const dateTo = query.dateTo as string | undefined;
+  if (dateFrom || dateTo) {
+    const appliedAt: Record<string, Date> = {};
+    if (dateFrom) appliedAt.$gte = new Date(dateFrom);
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      appliedAt.$lte = end;
+    }
+    filter.appliedAt = appliedAt;
+  }
+
+  const questionId = query.questionId as string | undefined;
+  const answer = query.answer as string | undefined;
+  if (questionId && answer) {
+    filter.answers = { $elemMatch: { questionId, answer: { $in: [answer] } } };
+  }
+
+  return filter;
+}
+
 // Get job applications (for employer)
 export const getJobApplications = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -574,7 +632,8 @@ export const getJobApplications = asyncHandler(
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
     const status = req.query.status as string | undefined;
 
-    const filter: Record<string, unknown> = { job: jobId };
+    const baseFilter = await buildApplicationFilter(job._id, req.query as Record<string, unknown>, { includeStatus: false });
+    const filter: Record<string, unknown> = { ...baseFilter };
     if (status && status !== 'all') {
       filter.status = status;
     }
@@ -587,7 +646,7 @@ export const getJobApplications = asyncHandler(
         .limit(limit),
       Application.countDocuments(filter),
       Application.aggregate([
-        { $match: { job: job._id } },
+        { $match: baseFilter },
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]),
     ]);
@@ -603,6 +662,7 @@ export const getJobApplications = asyncHandler(
       data: applications,
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
       counts,
+      job: { _id: job._id, title: job.title, questions: job.questions },
     });
   }
 );
@@ -625,15 +685,18 @@ export const exportJobApplications = asyncHandler(
       throw new AppError('Not authorized to view applications', 403);
     }
 
-    const status = req.query.status as string | undefined;
-    const filter: Record<string, unknown> = { job: jobId };
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
+    const filter = await buildApplicationFilter(job._id, req.query as Record<string, unknown>);
 
-    const applications = await Application.find(filter)
+    const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10) || 1) : undefined;
+    const limit = req.query.limit ? Math.min(1000, Math.max(1, parseInt(req.query.limit as string, 10) || 1000)) : undefined;
+
+    let applicationsQuery = Application.find(filter)
       .populate('applicant', 'firstname lastname email phone')
       .sort({ createdAt: -1 });
+    if (page && limit) {
+      applicationsQuery = applicationsQuery.skip((page - 1) * limit).limit(limit);
+    }
+    const applications = await applicationsQuery;
 
     const escapeCsv = (value: unknown): string => {
       const str = value === null || value === undefined ? '' : String(value);
