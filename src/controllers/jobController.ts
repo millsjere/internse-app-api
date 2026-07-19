@@ -601,10 +601,28 @@ async function buildApplicationFilter(
     filter.appliedAt = appliedAt;
   }
 
-  const questionId = query.questionId as string | undefined;
-  const answer = query.answer as string | undefined;
-  if (questionId && answer) {
-    filter.answers = { $elemMatch: { questionId, answer: { $in: [answer] } } };
+  // `questions` is a JSON-encoded array of {questionId, answer} pairs — an applicant must
+  // match ALL of them (AND) to be included, letting employers narrow by multiple questions at once.
+  const questionsRaw = query.questions as string | undefined;
+  if (questionsRaw) {
+    let pairs: unknown;
+    try {
+      pairs = JSON.parse(questionsRaw);
+    } catch {
+      pairs = [];
+    }
+    if (Array.isArray(pairs)) {
+      const clauses = pairs
+        .filter(
+          (p): p is { questionId: string; answer: string } =>
+            !!p && typeof p.questionId === 'string' && typeof p.answer === 'string' && p.questionId && p.answer
+        )
+        .slice(0, 10)
+        .map((p) => ({ answers: { $elemMatch: { questionId: p.questionId, answer: { $in: [p.answer] } } } }));
+      if (clauses.length > 0) {
+        filter.$and = clauses;
+      }
+    }
   }
 
   return filter;
