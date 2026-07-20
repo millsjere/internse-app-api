@@ -661,7 +661,8 @@ export const getJobApplications = asyncHandler(
         .populate('applicant', 'firstname lastname email phone profilePhoto')
         .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * limit)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Application.countDocuments(filter),
       Application.aggregate([
         { $match: baseFilter },
@@ -708,9 +709,14 @@ export const exportJobApplications = asyncHandler(
     const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10) || 1) : undefined;
     const limit = req.query.limit ? Math.min(1000, Math.max(1, parseInt(req.query.limit as string, 10) || 1000)) : undefined;
 
+    // .lean() returns plain objects instead of hydrated Mongoose documents — this is a
+    // read-only export, and it also sidesteps schema-casting errors that a malformed/legacy
+    // record could otherwise throw while Mongoose hydrates it (which the per-row try/catch
+    // below can't catch, since that error would happen before we even get the row data).
     let applicationsQuery = Application.find(filter)
       .populate('applicant', 'firstname lastname email phone')
-      .sort({ createdAt: -1, _id: -1 });
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
     if (page && limit) {
       applicationsQuery = applicationsQuery.skip((page - 1) * limit).limit(limit);
     }
@@ -735,24 +741,36 @@ export const exportJobApplications = asyncHandler(
     };
 
     const rows = applications.map((app) => {
-      const applicant = app.applicant as unknown as { firstname?: string; lastname?: string; email?: string; phone?: string } | undefined;
-      const answerByQuestionId = new Map(
-        (app.answers || [])
-          .filter((a): a is NonNullable<typeof a> => !!a && typeof a.questionId === 'string')
-          .map((a) => [a.questionId, Array.isArray(a.answer) ? a.answer.join('; ') : a.answer])
-      );
-      return [
-        applicant ? `${applicant.firstname ?? ''} ${applicant.lastname ?? ''}`.trim() : '',
-        applicant?.email ?? '',
-        applicant?.phone ?? '',
-        app.status,
-        toIsoString(app.appliedAt),
-        app.resume ?? '',
-        app.coverLetter ?? '',
-        ...questionColumns.map((q) => answerByQuestionId.get(q.id) ?? ''),
-      ]
-        .map(escapeCsv)
-        .join(',');
+      // A single malformed/legacy record shouldn't take down the whole export batch —
+      // fall back to a minimal row (and log the offender) instead of throwing.
+      try {
+        const applicant = app.applicant as unknown as { firstname?: string; lastname?: string; email?: string; phone?: string } | undefined;
+        const answerByQuestionId = new Map(
+          (app.answers || [])
+            .filter((a): a is NonNullable<typeof a> => !!a && typeof a.questionId === 'string')
+            .map((a) => [a.questionId, Array.isArray(a.answer) ? a.answer.join('; ') : a.answer])
+        );
+        return [
+          applicant ? `${applicant.firstname ?? ''} ${applicant.lastname ?? ''}`.trim() : '',
+          applicant?.email ?? '',
+          applicant?.phone ?? '',
+          app.status,
+          toIsoString(app.appliedAt),
+          app.resume ?? '',
+          app.coverLetter ?? '',
+          ...questionColumns.map((q) => answerByQuestionId.get(q.id) ?? ''),
+        ]
+          .map(escapeCsv)
+          .join(',');
+      } catch (err) {
+        console.error(`CSV export: failed to build row for application ${app._id}:`, err);
+        return [
+          '', '', '', app.status ?? '', '', '', '(error building this row — contact support)',
+          ...questionColumns.map(() => ''),
+        ]
+          .map(escapeCsv)
+          .join(',');
+      }
     });
 
     const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
