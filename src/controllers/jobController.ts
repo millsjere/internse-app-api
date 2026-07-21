@@ -704,23 +704,36 @@ export const exportJobApplications = asyncHandler(
       throw new AppError('Not authorized to view applications', 403);
     }
 
-    const filter = await buildApplicationFilter(job._id, req.query as Record<string, unknown>);
+    const filter: Record<string, unknown> = await buildApplicationFilter(job._id, req.query as Record<string, unknown>);
 
-    const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10) || 1) : undefined;
-    const limit = req.query.limit ? Math.min(1000, Math.max(1, parseInt(req.query.limit as string, 10) || 1000)) : undefined;
+    const limit = req.query.limit ? Math.min(1000, Math.max(1, parseInt(req.query.limit as string, 10) || 1000)) : 1000;
+
+    // Cursor-based (keyset) pagination instead of skip/limit. `.skip(n)` makes MongoDB walk
+    // and discard n documents before it can return anything, so cost grows with page number —
+    // for a large applicant list the last (highest-offset) batch is the slowest and the most
+    // likely to blow past a request timeout. Resuming from the last row's sort key instead
+    // keeps every batch's query cost the same regardless of how deep into the export it is.
+    const cursorId = req.query.cursorId as string | undefined;
+    const cursorDate = req.query.cursorDate as string | undefined;
+    if (cursorId && cursorDate && /^[a-f\d]{24}$/i.test(cursorId)) {
+      const cursorCreatedAt = new Date(cursorDate);
+      if (!Number.isNaN(cursorCreatedAt.getTime())) {
+        filter.$or = [
+          { createdAt: { $lt: cursorCreatedAt } },
+          { createdAt: cursorCreatedAt, _id: { $lt: cursorId } },
+        ];
+      }
+    }
 
     // .lean() returns plain objects instead of hydrated Mongoose documents — this is a
     // read-only export, and it also sidesteps schema-casting errors that a malformed/legacy
     // record could otherwise throw while Mongoose hydrates it (which the per-row try/catch
     // below can't catch, since that error would happen before we even get the row data).
-    let applicationsQuery = Application.find(filter)
+    const applications = await Application.find(filter)
       .populate('applicant', 'firstname lastname email phone')
       .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
       .lean();
-    if (page && limit) {
-      applicationsQuery = applicationsQuery.skip((page - 1) * limit).limit(limit);
-    }
-    const applications = await applicationsQuery;
 
     const escapeCsv = (value: unknown): string => {
       const str = value === null || value === undefined ? '' : String(value);
@@ -775,6 +788,17 @@ export const exportJobApplications = asyncHandler(
 
     const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
     const filename = `applicants-${createSlug(job.title)}-${Date.now()}.csv`;
+
+    // Lets the client resume from exactly where this batch left off without knowing page
+    // numbers. A full batch (rowCount === limit) means there may be more; a short batch means
+    // this was the last one. Must be explicitly exposed — browsers hide custom response
+    // headers from cross-origin JS unless the server opts in via Access-Control-Expose-Headers.
+    const lastApplication = applications[applications.length - 1];
+    res.setHeader('X-Export-Row-Count', String(applications.length));
+    if (lastApplication) {
+      res.setHeader('X-Export-Next-Cursor-Id', String(lastApplication._id));
+      res.setHeader('X-Export-Next-Cursor-Date', new Date(lastApplication.createdAt as unknown as string).toISOString());
+    }
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

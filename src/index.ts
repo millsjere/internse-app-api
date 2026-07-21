@@ -31,11 +31,14 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
 ].filter((url): url is string => Boolean(url));
 
-app.use(cors({ 
-  origin: allowedOrigins, 
+app.use(cors({
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  // Custom response headers are hidden from cross-origin JS by default — the applicants CSV
+  // export reads these to page through batches via a cursor instead of skip/limit.
+  exposedHeaders: ['X-Export-Row-Count', 'X-Export-Next-Cursor-Id', 'X-Export-Next-Cursor-Date'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

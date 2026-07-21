@@ -156,6 +156,7 @@ export interface IApplication extends Document {
     answer: string | string[];
   }>;
   appliedAt: Date;
+  createdAt: Date;
   updatedAt: Date;
 }
 
